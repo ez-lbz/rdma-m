@@ -14,7 +14,7 @@ def refresh_gcov(ssh_client):
 
         print("[STEP 2] Generating Kernel HTML Report")
         util.run_remote_cmd(ssh_client, 'mkdir -p /tmp/coverage')
-        if not util.run_remote_cmd(ssh_client, 'genhtml /home/kernel_coverage.info --output-directory /tmp/coverage/kernel_html_report'):
+        if not util.run_remote_cmd(ssh_client, 'genhtml /home/kernel_coverage.info --output-directory /tmp/coverage/kernel_html_report --ignore-errors empty'):
             return False
         if not util.ssh_retry_until_file_exist(ssh_client, "/tmp/coverage/kernel_html_report"):
             return False
@@ -29,7 +29,7 @@ def refresh_gcov(ssh_client):
             return False
 
         print("[STEP 5] Generating User HTML Report")
-        if not util.run_remote_cmd(ssh_client, 'genhtml /home/user_coverage.info --output-directory /tmp/coverage/user_html_report'):
+        if not util.run_remote_cmd(ssh_client, 'genhtml /home/user_coverage.info --output-directory /tmp/coverage/user_html_report --ignore-errors empty'):
             return False
         if not util.ssh_retry_until_file_exist(ssh_client, "/tmp/coverage/user_html_report"):
             return False
