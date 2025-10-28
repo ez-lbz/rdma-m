@@ -2,8 +2,13 @@ import util
 
 def refresh_gcov(ssh_client):
     try:
+        print("[STEP 0] Cleaning up old files")
+        # 清理本地模板目录
         util.run_cmd('sudo rm -rf templates/kernel/*')
         util.run_cmd('sudo rm -rf templates/user/*')
+        
+        # 清理远程的所有旧 .info 文件和临时目录
+        util.run_remote_cmd(ssh_client, 'rm -f /home/kernel_coverage.info /home/user_coverage.info')
         util.run_remote_cmd(ssh_client, 'rm -rf /tmp/coverage')
         util.run_remote_cmd(ssh_client, 'mkdir -p /tmp/coverage')
 
