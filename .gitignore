@@ -1,5 +1,6 @@
 .idea
 .vscode
 pyenv
-templates/*
+templates/kernel
+templates/user
 __pycache__/
