@@ -4,17 +4,31 @@ def refresh_gcov(ssh_client):
     try:
         util.run_cmd('sudo rm -rf templates/kernel/*')
         util.run_cmd('sudo rm -rf templates/user/*')
-        util.run_remote_cmd(ssh_client, 'rm -rf /tmp/coverage/kernel_html_report /tmp/coverage/user_html_report')
+        util.run_remote_cmd(ssh_client, 'rm -rf /tmp/coverage')
+        util.run_remote_cmd(ssh_client, 'mkdir -p /tmp/coverage')
 
 
-        print("[STEP 1] Collecting Kernel GCOV")
-        util.run_remote_cmd(ssh_client, 'python3 /home/fastcov/fastcov.py -f /sys/kernel/debug/gcov/usr/src/linux-source-6.8.0/linux-source-6.8.0/drivers/infiniband/core/*.gcda /sys/kernel/debug/gcov/usr/src/linux-source-6.8.0/linux-source-6.8.0/drivers/infiniband/sw/rxe/*.gcda /sys/kernel/debug/gcov/usr/src/linux-source-6.8.0/linux-source-6.8.0/drivers/infiniband/hw/mlx5/*.gcda -i /home/lbz/qemu/noble/drivers/infiniband/ -o /home/kernel_coverage.info -X -l -n')
+        print("[STEP 1] Collecting Kernel GCOV with LCOV")
+        # 使用 lcov 从内核 debugfs 收集覆盖率数据
+        kernel_base_dir = '/sys/kernel/debug/gcov/usr/src/linux-source-6.8.0/linux-source-6.8.0/drivers/infiniband'
+        
+        # 收集 core 模块覆盖率
+        util.run_remote_cmd(ssh_client, f'lcov --capture --directory {kernel_base_dir}/core --output-file /tmp/coverage/kernel_core.info --ignore-errors source,gcov')
+        
+        # 收集 rxe 模块覆盖率
+        util.run_remote_cmd(ssh_client, f'lcov --capture --directory {kernel_base_dir}/sw/rxe --output-file /tmp/coverage/kernel_rxe.info --ignore-errors source,gcov')
+        
+        # 收集 mlx5 模块覆盖率
+        util.run_remote_cmd(ssh_client, f'lcov --capture --directory {kernel_base_dir}/hw/mlx5 --output-file /tmp/coverage/kernel_mlx5.info --ignore-errors source,gcov')
+        
+        # 合并所有内核覆盖率文件
+        util.run_remote_cmd(ssh_client, 'lcov --add-tracefile /tmp/coverage/kernel_core.info --add-tracefile /tmp/coverage/kernel_rxe.info --add-tracefile /tmp/coverage/kernel_mlx5.info --output-file /home/kernel_coverage.info')
+        
         if not util.ssh_retry_until_file_exist(ssh_client, "/home/kernel_coverage.info"):
             return False
 
         print("[STEP 2] Generating Kernel HTML Report")
-        util.run_remote_cmd(ssh_client, 'mkdir -p /tmp/coverage')
-        if not util.run_remote_cmd(ssh_client, 'genhtml /home/kernel_coverage.info --output-directory /tmp/coverage/kernel_html_report --ignore-errors empty'):
+        if not util.run_remote_cmd(ssh_client, 'genhtml /home/kernel_coverage.info --output-directory /tmp/coverage/kernel_html_report --ignore-errors source,empty'):
             return False
         if not util.ssh_retry_until_file_exist(ssh_client, "/tmp/coverage/kernel_html_report"):
             return False
@@ -23,13 +37,30 @@ def refresh_gcov(ssh_client):
         if not util.scp_download_directory(ssh_client, "/tmp/coverage/kernel_html_report", "templates/kernel"):
             return False
 
-        print("[STEP 4] Collecting User GCOV")
-        util.run_remote_cmd(ssh_client, 'python3 /home/fastcov/fastcov.py -f /home/rdma-core-master/build/librdmacm/CMakeFiles/rspreload.dir/*.gcda /home/rdma-core-master/build/libibverbs/CMakeFiles/ibverbs.dir/*.gcda /home/rdma-core-master/build/librdmacm/CMakeFiles/rdmacm.dir/*.gcda -e /home/rdma-core-master/build/include -o /home/user_coverage.info -X -l -n')
+        print("[STEP 4] Collecting User GCOV with LCOV")
+        # 使用 lcov 收集用户态覆盖率
+        user_build_dir = '/home/rdma-core-master/build'
+        
+        # 收集 librdmacm 覆盖率
+        util.run_remote_cmd(ssh_client, f'lcov --capture --directory {user_build_dir}/librdmacm/CMakeFiles/rspreload.dir --output-file /tmp/coverage/user_rspreload.info --ignore-errors source,gcov')
+        
+        # 收集 libibverbs 覆盖率
+        util.run_remote_cmd(ssh_client, f'lcov --capture --directory {user_build_dir}/libibverbs/CMakeFiles/ibverbs.dir --output-file /tmp/coverage/user_ibverbs.info --ignore-errors source,gcov')
+        
+        # 收集 librdmacm 覆盖率
+        util.run_remote_cmd(ssh_client, f'lcov --capture --directory {user_build_dir}/librdmacm/CMakeFiles/rdmacm.dir --output-file /tmp/coverage/user_rdmacm.info --ignore-errors source,gcov')
+        
+        # 合并所有用户态覆盖率文件
+        util.run_remote_cmd(ssh_client, 'lcov --add-tracefile /tmp/coverage/user_rspreload.info --add-tracefile /tmp/coverage/user_ibverbs.info --add-tracefile /tmp/coverage/user_rdmacm.info --output-file /tmp/coverage/user_combined.info')
+        
+        # 移除 build/include 目录（这些是生成的头文件）
+        util.run_remote_cmd(ssh_client, f'lcov --remove /tmp/coverage/user_combined.info "{user_build_dir}/include/*" --output-file /home/user_coverage.info --ignore-errors unused')
+        
         if not util.ssh_retry_until_file_exist(ssh_client, "/home/user_coverage.info"):
             return False
 
         print("[STEP 5] Generating User HTML Report")
-        if not util.run_remote_cmd(ssh_client, 'genhtml /home/user_coverage.info --output-directory /tmp/coverage/user_html_report --ignore-errors empty'):
+        if not util.run_remote_cmd(ssh_client, 'genhtml /home/user_coverage.info --output-directory /tmp/coverage/user_html_report --ignore-errors source,empty'):
             return False
         if not util.ssh_retry_until_file_exist(ssh_client, "/tmp/coverage/user_html_report"):
             return False
@@ -45,7 +76,7 @@ def refresh_gcov(ssh_client):
 
 
         print("[STEP 7] Removing Remote Temp Files")
-        if not util.run_remote_cmd(ssh_client, 'rm -rf /tmp/coverage/kernel_html_report /tmp/coverage/user_html_report'):
+        if not util.run_remote_cmd(ssh_client, 'rm -rf /tmp/coverage /home/kernel_coverage.info /home/user_coverage.info'):
             return False
 
         print("[INFO] refresh_gcov finished successfully")
