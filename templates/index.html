@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>rdma-fuzz web UI</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* 全局样式 */
+        body {
+            background-color: #1a1a1a; /* 深黑色背景 */
+            color: #ffffff; /* 白色文字 */
+            font-family: 'Arial', sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
+            padding: 20px;
+        }
+
+        /* 主容器 */
+        .container {
+            background-color: #2b2b2b; /* 深灰色容器背景 */
+            padding: 2rem;
+            border-radius: 12px;
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+            max-width: 90vw; /* 增大宽度 */
+            width: 100%;
+            min-height: 80vh; /* 增大高度 */
+            display: flex;
+            flex-direction: column;
+            border: 2px solid #ffffff; /* 高对比度白色边框 */
+        }
+
+        /* 标题 */
+        h1 {
+            font-size: 2.5rem; /* 增大标题字体 */
+            font-weight: 700;
+            color: #ffffff;
+            text-align: center;
+            margin-bottom: 2rem;
+            text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+        }
+
+        /* 刷新按钮 */
+        .refresh-btn {
+            background-color: #ffffff; /* 白色背景 */
+            color: #1a1a1a; /* 深黑色文字 */
+            font-size: 1.25rem;
+            font-weight: 600;
+            padding: 0.75rem 2rem;
+            border-radius: 8px;
+            border: 2px solid #1a1a1a;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+        }
+        .refresh-btn:hover {
+            background-color: #1a1a1a;
+            color: #ffffff;
+            border-color: #ffffff;
+            transform: translateY(-2px);
+        }
+
+        /* 按钮容器 */
+        .button-container {
+            flex: 1; /* 占满剩余空间 */
+            display: flex;
+            justify-content: space-between;
+            gap: 1.5rem;
+            height: 66vh; /* 占下2/3屏幕 */
+        }
+
+        /* 功能按钮 */
+        .action-btn {
+            flex: 1;
+            background-color: #333333; /* 深灰色背景 */
+            color: #ffffff;
+            font-size: 1.5rem;
+            font-weight: 600;
+            border-radius: 12px;
+            border: 2px solid #ffffff;
+            transition: all 0.3s ease;
+            box-shadow: 0 6px 12px rgba(0, 0, 0, 0.4);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            text-decoration: none;
+        }
+        .action-btn:hover {
+            background-color: #ffffff;
+            color: #1a1a1a;
+            border-color: #1a1a1a;
+            transform: scale(1.02);
+        }
+
+        /* 加载动画 */
+        .spinner {
+            display: none;
+            border: 6px solid #ffffff; /* 白色边框 */
+            border-top: 6px solid #1a1a1a; /* 黑色旋转 */
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+        }
+        @keyframes spin {
+            0% { transform: translate(-50%, -50%) rotate(0deg); }
+            100% { transform: translate(-50%, -50%) rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>RDMA FUZZ UI</h1>
+        <div class="flex justify-center mb-8">
+            <button id="refresh-btn" class="refresh-btn">Refresh</button>
+        </div>
+        <div class="button-container">
+            <a href="/kernel/index.html" class="action-btn">Kernel Space</a>
+            <a href="/user/index.html" class="action-btn">User Space</a>
+        </div>
+    </div>
+    <div id="spinner" class="spinner"></div>
+    <script>
+        document.getElementById('refresh-btn').addEventListener('click', () => {
+            const spinner = document.getElementById('spinner');
+            spinner.style.display = 'block';
+
+            fetch('/refresh', { method: 'POST' })
+                .then(response => response.json())
+                .then(data => {
+                    spinner.style.display = 'none';
+                    if (data.message.includes('succeeded')) {
+                        alert('Success: ' + data.message);
+                    } else {
+                        alert('Failure: ' + data.message);
+                    }
+                })
+                .catch(error => {
+                    spinner.style.display = 'none';
+                    alert('Request error: ' + error);
+                });
+        });
+    </script>
+</body>
+</html>
