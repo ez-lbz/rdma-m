@@ -99,3 +99,47 @@ def ssh_retry_until_file_exist(ssh_client, filename):
             print("[!] try" + str(i) + "failed !!!")
             time.sleep(0.3)
     return False
+
+def scp_download_directory(ssh_client, remote_path, local_path):
+    """
+    使用 SCP 从远程服务器下载整个目录到本地
+    :param ssh_client: paramiko SSH 客户端
+    :param remote_path: 远程目录路径
+    :param local_path: 本地目录路径
+    :return: 成功返回 True，失败返回 False
+    """
+    try:
+        # 获取 SSH 连接信息
+        transport = ssh_client.get_transport()
+        hostname = transport.getpeername()[0]
+        
+        # 从 ssh_client 获取认证信息
+        # 这里我们需要构造 scp 命令
+        # 假设使用相同的密钥文件
+        key_path = "../id_rsa"
+        username = "root"
+        
+        # 确保本地目录存在
+        os.makedirs(local_path, exist_ok=True)
+        
+        # 构造 scp 命令 (递归下载整个目录)
+        # 使用 -r 递归，-o StrictHostKeyChecking=no 跳过主机密钥检查
+        cmd = f'scp -r -o StrictHostKeyChecking=no -i {key_path} {username}@{hostname}:{remote_path}/* {local_path}/'
+        
+        print(f"[SCP] Downloading from {hostname}:{remote_path} to {local_path}")
+        result = subprocess.run(cmd, shell=True, check=True, capture_output=True, text=True)
+        
+        if result.stdout:
+            print(f"[SCP STDOUT] {result.stdout.strip()}")
+        
+        print(f"[SCP] Successfully downloaded {remote_path} to {local_path}")
+        return True
+        
+    except subprocess.CalledProcessError as e:
+        print(f"[SCP ERROR] Failed to download {remote_path}")
+        if e.stderr:
+            print(f"[SCP STDERR] {e.stderr.strip()}")
+        return False
+    except Exception as e:
+        print(f"[SCP EXCEPTION] {e}")
+        return False

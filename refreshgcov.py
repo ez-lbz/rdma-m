@@ -1,28 +1,26 @@
-import subprocess
-import time
-
 import util
 
 def refresh_gcov(ssh_client):
     try:
         util.run_cmd('sudo rm -rf templates/kernel/*')
         util.run_cmd('sudo rm -rf templates/user/*')
-        util.run_cmd('sudo rm -rf ../share/coverage/kernel_html_report ../share/coverage/user_html_report')
+        util.run_remote_cmd(ssh_client, 'rm -rf /tmp/coverage/kernel_html_report /tmp/coverage/user_html_report')
 
 
         print("[STEP 1] Collecting Kernel GCOV")
-        util.run_remote_cmd(ssh_client, 'python3 /home/fastcov/fastcov.py -f /sys/kernel/debug/gcov/home/lbz/qemu/noble/drivers/infiniband/core/*.gcda /sys/kernel/debug/gcov/home/lbz/qemu/noble/drivers/infiniband/sw/rxe/*.gcda -i /home/lbz/qemu/noble/drivers/infiniband/ -o /home/kernel_coverage.info -X -l -n')
+        util.run_remote_cmd(ssh_client, 'python3 /home/fastcov/fastcov.py -f /sys/kernel/debug/gcov/usr/src/linux-source-6.8.0/linux-source-6.8.0/drivers/infiniband/core/*.gcda /sys/kernel/debug/gcov/usr/src/linux-source-6.8.0/linux-source-6.8.0/drivers/infiniband/sw/rxe/*.gcda /sys/kernel/debug/gcov/usr/src/linux-source-6.8.0/linux-source-6.8.0/drivers/infiniband/hw/mlx5/*.gcda -i /home/lbz/qemu/noble/drivers/infiniband/ -o /home/kernel_coverage.info -X -l -n')
         if not util.ssh_retry_until_file_exist(ssh_client, "/home/kernel_coverage.info"):
             return False
 
         print("[STEP 2] Generating Kernel HTML Report")
-        if not util.run_remote_cmd(ssh_client, 'genhtml /home/kernel_coverage.info --output-directory /home/share/coverage/kernel_html_report'):
+        util.run_remote_cmd(ssh_client, 'mkdir -p /tmp/coverage')
+        if not util.run_remote_cmd(ssh_client, 'genhtml /home/kernel_coverage.info --output-directory /tmp/coverage/kernel_html_report'):
             return False
-        if not util.ssh_retry_until_file_exist(ssh_client, "/home/share/coverage/kernel_html_report"):
+        if not util.ssh_retry_until_file_exist(ssh_client, "/tmp/coverage/kernel_html_report"):
             return False
 
-        print("[STEP 3] Moving Kernel Report")
-        if not util.run_cmd('sudo mv ../share/coverage/kernel_html_report/* templates/kernel'):
+        print("[STEP 3] Downloading Kernel Report via SCP")
+        if not util.scp_download_directory(ssh_client, "/tmp/coverage/kernel_html_report", "templates/kernel"):
             return False
 
         print("[STEP 4] Collecting User GCOV")
@@ -31,13 +29,13 @@ def refresh_gcov(ssh_client):
             return False
 
         print("[STEP 5] Generating User HTML Report")
-        if not util.run_remote_cmd(ssh_client, 'genhtml /home/user_coverage.info --output-directory /home/share/coverage/user_html_report'):
+        if not util.run_remote_cmd(ssh_client, 'genhtml /home/user_coverage.info --output-directory /tmp/coverage/user_html_report'):
             return False
-        if not util.ssh_retry_until_file_exist(ssh_client, "/home/share/coverage/user_html_report"):
+        if not util.ssh_retry_until_file_exist(ssh_client, "/tmp/coverage/user_html_report"):
             return False
 
-        print("[STEP 6] Moving User Report")
-        if not util.run_cmd('sudo mv ../share/coverage/user_html_report/* templates/user'):
+        print("[STEP 6] Downloading User Report via SCP")
+        if not util.scp_download_directory(ssh_client, "/tmp/coverage/user_html_report", "templates/user"):
             return False
 
         if not util.retry_until_file_exist("templates/kernel/index.html"):
@@ -46,8 +44,8 @@ def refresh_gcov(ssh_client):
             return False
 
 
-        print("[STEP 7] Removing Temp Files")
-        if not util.run_cmd('sudo rm -rf ../share/coverage/kernel_html_report ../share/coverage/user_html_report'):
+        print("[STEP 7] Removing Remote Temp Files")
+        if not util.run_remote_cmd(ssh_client, 'rm -rf /tmp/coverage/kernel_html_report /tmp/coverage/user_html_report'):
             return False
 
         print("[INFO] refresh_gcov finished successfully")

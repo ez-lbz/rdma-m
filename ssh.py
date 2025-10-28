@@ -1,7 +1,7 @@
 import paramiko
 
 def ssh_get():
-    hostname = "192.168.100.2"
+    hostname = "192.168.122.72"
     port = 22
     username = "root"
     key_path = "../id_rsa"
