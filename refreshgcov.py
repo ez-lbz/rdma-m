@@ -43,25 +43,25 @@ def refresh_gcov(ssh_client):
             return False
 
         print("[STEP 4] Collecting User GCOV with LCOV")
-        # 使用 lcov 收集用户态覆盖率
+        # 使用 lcov 一次性收集整个 build 目录，然后提取需要的部分
         user_build_dir = '/home/rdma-core-master/build'
         
-        # 收集 librdmacm 覆盖率
-        util.run_remote_cmd(ssh_client, f'lcov --capture --directory {user_build_dir}/librdmacm/CMakeFiles/rspreload.dir --output-file /tmp/coverage/user_rspreload.info --ignore-errors source,gcov')
+        # 一次性收集整个 build 目录的覆盖率
+        util.run_remote_cmd(ssh_client, f'lcov --capture --directory {user_build_dir} --output-file /tmp/coverage/user_all.info --ignore-errors source,gcov,empty')
+        if not util.ssh_retry_until_file_exist(ssh_client, "/tmp/coverage/user_all.info"):
+            print("[ERROR] Failed to capture user coverage")
+            return False
         
-        # 收集 libibverbs 覆盖率
-        util.run_remote_cmd(ssh_client, f'lcov --capture --directory {user_build_dir}/libibverbs/CMakeFiles/ibverbs.dir --output-file /tmp/coverage/user_ibverbs.info --ignore-errors source,gcov')
+        # 提取 libibverbs 和 librdmacm 的覆盖率，排除其他不需要的部分
+        util.run_remote_cmd(ssh_client, f'lcov --extract /tmp/coverage/user_all.info "*/libibverbs/*" "*/librdmacm/*" --output-file /tmp/coverage/user_filtered.info --ignore-errors unused')
+        if not util.ssh_retry_until_file_exist(ssh_client, "/tmp/coverage/user_filtered.info"):
+            print("[ERROR] Failed to filter user coverage")
+            return False
         
-        # 收集 librdmacm 覆盖率
-        util.run_remote_cmd(ssh_client, f'lcov --capture --directory {user_build_dir}/librdmacm/CMakeFiles/rdmacm.dir --output-file /tmp/coverage/user_rdmacm.info --ignore-errors source,gcov')
-        
-        # 合并所有用户态覆盖率文件
-        util.run_remote_cmd(ssh_client, 'lcov --add-tracefile /tmp/coverage/user_rspreload.info --add-tracefile /tmp/coverage/user_ibverbs.info --add-tracefile /tmp/coverage/user_rdmacm.info --output-file /tmp/coverage/user_combined.info')
-        
-        # 移除 build/include 目录（这些是生成的头文件）
-        util.run_remote_cmd(ssh_client, f'lcov --remove /tmp/coverage/user_combined.info "{user_build_dir}/include/*" --output-file /home/user_coverage.info --ignore-errors unused')
-        
+        # 移除不需要的文件（build/include, tests, examples 等）
+        util.run_remote_cmd(ssh_client, f'lcov --remove /tmp/coverage/user_filtered.info "*/build/include/*" "*/tests/*" "*/test/*" "*/examples/*" --output-file /home/user_coverage.info --ignore-errors unused')
         if not util.ssh_retry_until_file_exist(ssh_client, "/home/user_coverage.info"):
+            print("[ERROR] Failed to generate final user coverage")
             return False
 
         print("[STEP 5] Generating User HTML Report")
