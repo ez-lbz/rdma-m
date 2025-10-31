@@ -99,3 +99,29 @@ def ssh_retry_until_file_exist(ssh_client, filename):
             print("[!] try" + str(i) + "failed !!!")
             time.sleep(0.3)
     return False
+
+def _sftp_ensure_local_dir(local_path: str) -> None:
+    if not os.path.exists(local_path):
+        os.makedirs(local_path, exist_ok=True)
+
+def sftp_download_dir(ssh_client: paramiko.SSHClient, remote_dir: str, local_dir: str) -> bool:
+    try:
+        _sftp_ensure_local_dir(local_dir)
+        sftp = ssh_client.open_sftp()
+        stack = [(remote_dir, local_dir)]
+        while stack:
+            current_remote, current_local = stack.pop()
+            _sftp_ensure_local_dir(current_local)
+            for entry in sftp.listdir_attr(current_remote):
+                remote_path = current_remote.rstrip('/') + '/' + entry.filename
+                local_path = os.path.join(current_local, entry.filename)
+                if paramiko.S_ISDIR(entry.st_mode):
+                    stack.append((remote_path, local_path))
+                else:
+                    _sftp_ensure_local_dir(os.path.dirname(local_path))
+                    sftp.get(remote_path, local_path)
+        sftp.close()
+        return True
+    except Exception as e:
+        print(f"[SFTP ERROR] Failed to download {remote_dir} -> {local_dir}: {e}")
+        return False
